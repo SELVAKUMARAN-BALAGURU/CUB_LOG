@@ -193,6 +193,22 @@ def generate_pdf(data, filename):
     elements.append(table)
     doc.build(elements)
 
+def load_professors():
+    return pd.read_excel(EXCEL_FILE, sheet_name="Sheet3")
+
+def save_professor(new_prof):
+    df_prof = load_professors()
+    df_prof = pd.concat([df_prof, pd.DataFrame([new_prof])], ignore_index=True)
+
+    with pd.ExcelWriter(EXCEL_FILE, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+        df_prof.to_excel(writer, sheet_name="Sheet3", index=False)
+
+
+if "prof_logged_in" not in st.session_state:
+    st.session_state.prof_logged_in = False
+
+if "prof_name" not in st.session_state:
+    st.session_state.prof_name = ""
 # ---------------- UI ----------------
 st.title("📘 Student Log Management System")
 
@@ -254,80 +270,135 @@ if page == "Student":
 # ================= PROFESSOR PAGE =================
 if page == "Professor":
 
-    st.subheader("👨‍🏫 Professor Dashboard")
+    # If NOT logged in → show login/signup
+    if not st.session_state.prof_logged_in:
 
-    # ---- View All Logs ----
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.markdown("### 📋 View All Logs")
+        st.subheader("🔐 Professor Authentication")
 
-    display_df = logs_df.copy()
-    display_df["date"] = pd.to_datetime(display_df["date"]).dt.strftime("%d-%m-%Y")
-    st.dataframe(display_df, use_container_width=True)
+        auth_option = st.radio("Select Option", ["Login", "Sign Up"])
 
-    st.markdown('</div>', unsafe_allow_html=True)
+        # ---------------- SIGN UP ----------------
+        if auth_option == "Sign Up":
+            st.markdown("### 📝 Professor Sign Up")
 
-    # ---- Search by Register Number ----
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.markdown("### 🔍 Search by Register Number")
+            faculty_id = st.text_input("Faculty ID")
+            name = st.text_input("Name")
+            password = st.text_input("Password", type="password")
 
-    search_reg = st.text_input("Enter Register Number")
+            if st.button("Create Account"):
 
-    if search_reg:
-        if search_reg.isdigit():
-            search_reg = int(search_reg)
-            filtered = logs_df[logs_df["reg_no"] == search_reg]
+                df_prof = load_professors()
 
-            if not filtered.empty:
-                filtered_display = filtered.copy()
-                filtered_display["date"] = pd.to_datetime(filtered_display["date"]).dt.strftime("%d-%m-%Y")
-                st.dataframe(filtered_display, use_container_width=True)
-            else:
-                st.warning("No logs found for this register number.")
-        else:
-            st.warning("Enter a valid numeric register number.")
+                if faculty_id in df_prof["faculty_id"].astype(str).values:
+                    st.error("Faculty ID already exists!")
+                else:
+                    new_prof = {
+                        "faculty_id": faculty_id,
+                        "name": name,
+                        "password": password
+                    }
+                    save_professor(new_prof)
+                    st.success("Account created successfully! Please login.")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+        # ---------------- LOGIN ----------------
+        elif auth_option == "Login":
+            st.markdown("### 🔑 Professor Login")
 
-    # ---- Faculty ID Search ----
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.markdown("### 👥 View Logs by Faculty ID")
+            faculty_id = st.text_input("Faculty ID")
+            password = st.text_input("Password", type="password")
 
-    faculty_id = st.text_input("Enter Faculty ID")
+            if st.button("Login"):
 
-    if faculty_id:
-        faculty_students = students_df[students_df["faculty_id"] == faculty_id]["reg_no"]
-        faculty_logs = logs_df[logs_df["reg_no"].isin(faculty_students)]
+                df_prof = load_professors()
+                df_prof["faculty_id"] = df_prof["faculty_id"].astype(str)
+                df_prof["password"]=df_prof["password"].astype(str)
+                user = df_prof[
+                    (df_prof["faculty_id"] == faculty_id) &
+                    (df_prof["password"] == password)
+                ]
 
-        if not faculty_logs.empty:
-            faculty_display = faculty_logs.copy()
-            faculty_display["date"] = pd.to_datetime(faculty_display["date"]).dt.strftime("%d-%m-%Y")
-            st.dataframe(faculty_display, use_container_width=True)
-        else:
-            st.warning("No logs found for this faculty.")
+                if not user.empty:
+                    st.session_state.prof_logged_in = True
+                    st.session_state.prof_name = user.iloc[0]["name"]
+                    st.success("Login Successful!")
+                    st.rerun()
+                else:
+                    st.error("Invalid Faculty ID or Password")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    # ================= AFTER LOGIN =================
+    else:
+        st.success(f"Welcome {st.session_state.prof_name} 👨‍🏫")
 
-    # ---- PDF Section ----
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.markdown("### 📄 Generate PDF Report")
+        if st.button("Logout"):
+            st.session_state.prof_logged_in = False
+            st.session_state.prof_name = ""
+            st.rerun()
 
-    col1, col2 = st.columns(2)
-    from_date = col1.date_input("From Date")
-    to_date = col2.date_input("To Date")
+        prof_option = st.sidebar.radio(
+            "Professor Options",
+            ["View All Logs", "Search by Student ID", "Search by Faculty ID", "Generate Report"],
+            key="prof_sidebar_options"
+        )
 
-    if st.button("Generate Report"):
-        logs_df["date"] = pd.to_datetime(logs_df["date"])
-        filtered = logs_df[
-            (logs_df["date"] >= pd.to_datetime(from_date)) &
-            (logs_df["date"] <= pd.to_datetime(to_date))
-        ]
 
-        if not filtered.empty:
-            filename = "weekly_report.pdf"
-            generate_pdf(filtered, filename)
-            with open(filename, "rb") as f:
-                st.download_button("Download PDF", f, file_name=filename)
-        else:
-            st.warning("No logs in selected date range")
+        st.subheader("👨‍🏫 Professor Dashboard")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+        # ---- VIEW ALL LOGS ----
+        if prof_option == "View All Logs":
+            display_df = logs_df.copy()
+            display_df["date"] = pd.to_datetime(display_df["date"]).dt.strftime("%d-%m-%Y")
+            st.dataframe(display_df, use_container_width=True)
+
+        # ---- SEARCH BY STUDENT ----
+        elif prof_option == "Search by Student ID":
+            search_reg = st.text_input("Enter Register Number")
+
+            if search_reg:
+                filtered = logs_df[logs_df["reg_no"].astype(str) == search_reg]
+                if not filtered.empty:
+                    st.dataframe(filtered, use_container_width=True)
+                else:
+                    st.warning("No logs found.")
+
+        # ---- SEARCH BY FACULTY ----
+        elif prof_option == "Search by Faculty ID":
+            faculty_id = st.text_input("Enter Faculty ID")
+
+            if faculty_id:
+                faculty_students = students_df[
+                    students_df["faculty_id"].astype(str) == faculty_id
+                ]["reg_no"]
+
+                faculty_logs = logs_df[
+                    logs_df["reg_no"].astype(str).isin(faculty_students.astype(str))
+                ]
+
+                if not faculty_logs.empty:
+                    st.dataframe(faculty_logs, use_container_width=True)
+                else:
+                    st.warning("No logs found.")
+
+        # ---- GENERATE REPORT ----
+        elif prof_option == "Generate Report":
+            col1, col2 = st.columns(2)
+            from_date = col1.date_input("From Date")
+            to_date = col2.date_input("To Date")
+
+            if st.button("Generate Report"):
+                logs_df["date"] = pd.to_datetime(logs_df["date"])
+
+                filtered = logs_df[
+                    (logs_df["date"] >= pd.to_datetime(from_date)) &
+                    (logs_df["date"] <= pd.to_datetime(to_date))
+                ]
+
+                if not filtered.empty:
+                    filename = "weekly_report.pdf"
+                    generate_pdf(filtered, filename)
+
+                    with open(filename, "rb") as f:
+                        st.download_button("Download PDF", f, file_name=filename)
+                else:
+                    st.warning("No logs found in range.")
+
+
