@@ -149,7 +149,45 @@ svg {
     visibility: hidden;
 }
             
+/* =========================
+   FINAL TIME DROPDOWN FIX
+========================= */
 
+/* Popover container */
+div[data-baseweb="popover"] {
+    background-color: #ffffff !important;
+}
+
+/* List container */
+ul[role="listbox"] {
+    background-color: #ffffff !important;
+}
+
+/* Each option container */
+li[role="option"] {
+    background-color: #ffffff !important;
+}
+
+/* FORCE text color inside option */
+li[role="option"] * {
+    color: #000000 !important;
+    opacity: 1 !important;
+}
+
+/* Hover */
+li[role="option"]:hover {
+    background-color: #f1f5f9 !important;
+}
+
+/* Selected option */
+li[aria-selected="true"] {
+    background-color: #e2e8f0 !important;
+}
+
+li[aria-selected="true"] * {
+    color: #000000 !important;
+    opacity: 1 !important;
+}
 
 
 
